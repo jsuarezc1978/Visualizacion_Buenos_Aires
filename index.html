@@ -1,11 +1,11 @@
 <!DOCTYPE html>
+
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Visualización Airbnb Buenos Aires</title>
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Visualización Airbnb Buenos Aires</title>
+<style>
     body {
       font-family: Arial, sans-serif;
       margin: 0;
@@ -59,433 +59,56 @@
       z-index: 10;
     }
 
-  </style>
+  
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 0.7fr);
+  gap: 30px;
+  justify-items: center;
+}
+.chart-block {
+  margin: 0; /* Quitamos márgenes verticales para que el grid funcione bien */
+}
+</style>
 </head>
 <body>
-  <h1 style="text-align:center;">Visualización Airbnb - Buenos Aires</h1>
-
-  <!-- Gráfico 1: Distribución por tipo de alojamiento -->
-  <div class="chart-block">
-    <div class="chart-title">Distribución por tipo de alojamiento</div>
-    <div class="chart-desc">Cantidad de anuncios publicados según el tipo de habitación ofrecida.</div>
-    <svg id="barChart" width="600" height="400"></svg>
-  </div>
-
-  <!-- Gráfico 2: Histograma de precios -->
-  <div class="chart-block">
-    <div class="chart-title">Distribución de Precios</div>
-    <div class="chart-desc">Frecuencia de alojamientos según su precio por noche (ARS$).</div>
-    <svg id="priceHistogram" width="600" height="400"></svg>
-  </div>
-
-  <!-- Gráfico 3: Relación entre días disponibles y número de reseñas -->
-  <div class="chart-block">
-    <div class="chart-title">Días Disponibles vs. Número de Reseñas</div>
-    <div class="chart-desc">Relación entre la disponibilidad del alojamiento en el año y la cantidad de reseñas.</div>
-    <svg id="scatterChart" width="600" height="400"></svg>
-  </div>
-
-  <!-- Gráfico 4: Frecuencia mensual de reseñas por tipo de habitación -->
-  <div class="chart-block">
-    <div class="chart-title">Frecuencia Mensual de Reseñas</div>
-    <div class="chart-desc">Cantidad de reseñas por tipo de habitación a lo largo de los meses.</div>
-    <svg id="monthlyChart" width="600" height="400"></svg>
-  </div>
-
-  <!-- Gráfico 5: Mapa de calor de alojamientos con contorno -->
-  <div class="chart-block">
-    <div class="chart-title">Mapa de Alojamientos en Buenos Aires</div>
-    <div class="chart-desc">Mapa con distribución espacial de alojamientos basada en número de reseñas.</div>
-    <svg id="mapChartGeo" width="600" height="500"></svg>
-  </div>
-
-  <!-- Tooltip global -->
-  <div class="tooltip" id="tooltip"></div>
-
-  <div class="tooltip" id="tooltipMap"></div>
-
-  <!-- Script -->
-  <script>
-    const geojson_url = "https://raw.githubusercontent.com/juan-gutierrez/buenos-aires-geojson/main/barrios/barrios.geojson";
-
-    const url = "https://raw.githubusercontent.com/jsuarezc1978/HerramientasVisualizacion/main/listings_Buenos_Aires_limpio.csv";
-
-    d3.dsv(";", url).then(data => {
-      // Limpieza mínima
-      data.forEach(d => {
-        d.room_type = d.room_type ? d.room_type.trim() : "Desconocido";
-        d.price = +d.price.replace(/[^0-9.-]+/g, "");
-        d.latitude = +d.latitude;
-        d.longitude = +d.longitude;
-      });
-
-
-      const tooltip = d3.select("#tooltip");
-      const margin = { top: 30, right: 40, bottom: 60, left: 60 };
-
-      // ================================
-      // 📊 Gráfico de barras: room_type
-      // ================================
-      const barSvg = d3.select("#barChart"),
-            barWidth = +barSvg.attr("width"),
-            barHeight = +barSvg.attr("height");
-
-      const grouped = d3.rollups(data, v => v.length, d => d.room_type);
-      const x = d3.scaleBand()
-                  .domain(grouped.map(d => d[0]))
-                  .range([margin.left, barWidth - margin.right])
-                  .padding(0.3);
-
-      const y = d3.scaleLinear()
-                  .domain([0, d3.max(grouped, d => d[1])])
-                  .nice()
-                  .range([barHeight - margin.bottom, margin.top]);
-
-      barSvg.append("g")
-            .attr("transform", `translate(0,${barHeight - margin.bottom})`)
-            .call(d3.axisBottom(x));
-
-      barSvg.append("text")
-            .attr("x", barWidth / 2)
-            .attr("y", barHeight - 10)
-            .attr("text-anchor", "middle")
-            .attr("class", "axis-label")
-            .text("Tipo de Alojamiento");
-
-      barSvg.selectAll("rect")
-            .data(grouped)
-            .enter()
-            .append("rect")
-            .attr("x", d => x(d[0]))
-            .attr("y", d => y(d[1]))
-            .attr("width", x.bandwidth())
-            .attr("height", d => barHeight - margin.bottom - y(d[1]))
-            .attr("fill", "steelblue")
-            .on("mouseover", (event, d) => {
-              tooltip.style("opacity", 1)
-                     .html(`<strong>${d[0]}</strong><br/>${d[1]} alojamientos`)
-                     .style("left", (event.pageX + 10) + "px")
-                     .style("top", (event.pageY - 28) + "px");
-            })
-            .on("mouseout", () => tooltip.style("opacity", 0));
-
-      barSvg.selectAll("text.bar-label")
-            .data(grouped)
-            .enter()
-            .append("text")
-            .attr("class", "bar-label")
-            .attr("x", d => x(d[0]) + x.bandwidth() / 2)
-            .attr("y", d => y(d[1]) - 5)
-            .attr("text-anchor", "middle")
-            .attr("fill", "#333")
-            .text(d => d[1]);
-
-      // ================================
-      // 📊 Histograma de precios
-      // ================================
-      const histogramSvg = d3.select("#priceHistogram"),
-            histWidth = +histogramSvg.attr("width"),
-            histHeight = +histogramSvg.attr("height");
-
-      const prices = data.map(d => d.price).filter(p => !isNaN(p));
-
-      const xHist = d3.scaleLinear()
-        .domain([0, d3.max(prices)])
-        .range([margin.left, histWidth - margin.right]);
-
-      const bins = d3.bin().domain(xHist.domain()).thresholds(20)(prices);
-
-      const yHist = d3.scaleLinear()
-        .domain([0, d3.max(bins, d => d.length)])
-        .range([histHeight - margin.bottom, margin.top]);
-
-      histogramSvg.append("g")
-        .attr("transform", `translate(0,${histHeight - margin.bottom})`)
-        .call(d3.axisBottom(xHist));
-
-      histogramSvg.append("text")
-        .attr("x", histWidth / 2)
-        .attr("y", histHeight - 10)
-        .attr("text-anchor", "middle")
-        .attr("class", "axis-label")
-        .text("Precio por Noche (ARS$)");
-
-      histogramSvg.append("g")
-        .attr("transform", `translate(${margin.left},0)`)
-        .call(d3.axisLeft(yHist));
-
-      histogramSvg.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("x", -histHeight / 2)
-        .attr("y", 15)
-        .attr("text-anchor", "middle")
-        .attr("class", "axis-label")
-        .text("Cantidad de Alojamientos");
-
-      histogramSvg.selectAll("rect")
-        .data(bins)
-        .enter()
-        .append("rect")
-        .attr("x", d => xHist(d.x0) + 1)
-        .attr("y", d => yHist(d.length))
-        .attr("width", d => xHist(d.x1) - xHist(d.x0) - 1)
-        .attr("height", d => histHeight - margin.bottom - yHist(d.length))
-        .attr("fill", "darkorange");
-
-      // ================================
-      // 📈 Scatter plot: Días vs Reseñas
-      // ================================
-      const scatterSvg = d3.select("#scatterChart"),
-            scatterWidth = +scatterSvg.attr("width"),
-            scatterHeight = +scatterSvg.attr("height");
-
-      const filteredScatter = data.filter(d => {
-        const avail = +d.availability_365;
-        const reviews = +d.number_of_reviews;
-        return !isNaN(avail) && !isNaN(reviews) && reviews < 500;
-      });
-
-      const xScatter = d3.scaleLinear()
-        .domain([0, 365])
-        .range([margin.left, scatterWidth - margin.right]);
-
-      const yScatter = d3.scaleLinear()
-        .domain([0, d3.max(filteredScatter, d => +d.number_of_reviews)])
-        .range([scatterHeight - margin.bottom, margin.top]);
-
-      scatterSvg.append("g")
-        .attr("transform", `translate(0,${scatterHeight - margin.bottom})`)
-        .call(d3.axisBottom(xScatter));
-
-      scatterSvg.append("g")
-        .attr("transform", `translate(${margin.left},0)`)
-        .call(d3.axisLeft(yScatter));
-
-      scatterSvg.selectAll("circle")
-        .data(filteredScatter)
-        .enter()
-        .append("circle")
-        .attr("cx", d => xScatter(+d.availability_365))
-        .attr("cy", d => yScatter(+d.number_of_reviews))
-        .attr("r", 3)
-        .attr("fill", "purple")
-        .attr("opacity", 0.5);
-
-      scatterSvg.append("text")
-        .attr("x", scatterWidth / 2)
-        .attr("y", scatterHeight - 10)
-        .attr("text-anchor", "middle")
-        .attr("class", "axis-label")
-        .text("Días Disponibles al Año");
-
-      scatterSvg.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("x", -scatterHeight / 2)
-        .attr("y", 15)
-        .attr("text-anchor", "middle")
-        .attr("class", "axis-label")
-        .text("Número de Reseñas");
-    
-      // ================================
-      // 📈 Gráfico de líneas por tipo de habitación
-      // ================================
-
-      // Limpieza y parsing
-      data.forEach(d => {
-        if (d.last_review && d.last_review.includes("-")) {
-          d.review_month = d.last_review.split("-")[1];
-        } else {
-          d.review_month = null;
-        }
-        d.room_type = d.room_type ? d.room_type.trim() : "Desconocido";
-      });
-
-      // Obtener meses y tipos únicos
-      const meses = ["01","02","03","04","05","06","07","08","09","10","11","12"];
-      const tipos = Array.from(new Set(data.map(d => d.room_type)));
-
-      // Crear estructura agrupada por tipo de habitación
-      const series = tipos.map(tipo => {
-        return {
-          tipo: tipo,
-          valores: meses.map(mes => {
-            const total = data.filter(d => d.review_month === mes && d.room_type === tipo).length;
-            return { mes: mes, cantidad: total };
-          })
-        };
-      });
-
-      // Escalas
-      const svg4 = d3.select("#monthlyChart"),
-            width4 = +svg4.attr("width"),
-            height4 = +svg4.attr("height");
-
-      const x4 = d3.scalePoint()
-        .domain(meses)
-        .range([margin.left, width4 - margin.right]);
-
-      const y4 = d3.scaleLinear()
-        .domain([0, d3.max(series, s => d3.max(s.valores, v => v.cantidad))])
-        .nice()
-        .range([height4 - margin.bottom, margin.top]);
-
-      const color = d3.scaleOrdinal()
-        .domain(tipos)
-        .range(d3.schemeSet2);
-
-      // Ejes
-      svg4.append("g")
-        .attr("transform", `translate(0,${height4 - margin.bottom})`)
-        .call(d3.axisBottom(x4));
-
-      svg4.append("g")
-        .attr("transform", `translate(${margin.left},0)`)
-        .call(d3.axisLeft(y4));
-
-      // Líneas
-      const linea = d3.line()
-        .x(d => x4(d.mes))
-        .y(d => y4(d.cantidad));
-
-      svg4.selectAll(".linea")
-        .data(series)
-        .enter()
-        .append("path")
-        .attr("class", "linea")
-        .attr("fill", "none")
-        .attr("stroke", d => color(d.tipo))
-        .attr("stroke-width", 2)
-        .attr("d", d => linea(d.valores));
-
-      // Leyenda
-      const legend = svg4.append("g")
-        .attr("class", "legend")
-        .attr("transform", `translate(${width4 - 140},${margin.top})`);
-
-      series.forEach((s, i) => {
-        const g = legend.append("g").attr("transform", `translate(0, ${i * 20})`);
-
-        g.append("rect")
-          .attr("width", 12)
-          .attr("height", 12)
-          .attr("fill", color(s.tipo));
-
-        g.append("text")
-          .attr("x", 16)
-          .attr("y", 10)
-          .text(s.tipo)
-          .attr("font-size", "12px")
-          .attr("fill", "#333");
-      });
-
-
-      // Ejes secundarios
-      svg4.append("text")
-        .attr("x", width4 / 2)
-        .attr("y", height4 - 10)
-        .attr("text-anchor", "middle")
-        .attr("class", "axis-label")
-        .text("Mes");
-
-      svg4.append("text")
-        .attr("transform", "rotate(-90)")
-        .attr("x", -height4 / 2)
-        .attr("y", 15)
-        .attr("text-anchor", "middle")
-        .attr("class", "axis-label")
-        .text("Cantidad de Reseñas");
-
-      // ================================
-      // 🗺️ Mapa con proyección centrada y contorno visible
-      // ================================
-
-      const svgGeo = d3.select("#mapChartGeo"),
-            widthGeo = +svgGeo.attr("width"),
-            heightGeo = +svgGeo.attr("height");
-
-      const projectionGeo = d3.geoMercator()
-                              .center([-58.42, -34.61]) // Centro de BA
-                              .scale(140000)             // Zoom adecuado
-                              .translate([widthGeo / 2, heightGeo / 2]);
-
-      const pathGeo = d3.geoPath().projection(projectionGeo);
-
-          // Nuevo GeoJSON más detallado
-          d3.json("https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/buenos-aires.geojson")
-        .then(geojson => {
-          // Fondo: barrios
-          svgGeo.append("g")
-                .selectAll("path")
-                .data(geojson.features)
-                .enter()
-                .append("path")
-                .attr("d", pathGeo)
-                .attr("fill", "#f0f0f0")
-                .attr("stroke", "#999");
-
-          // Puntos: alojamientos con tooltip
-          svgGeo.append("g")
-                .selectAll("circle")
-                .data(data.filter(d => +d.latitude && +d.longitude && +d.number_of_reviews))
-                .enter()
-                .append("circle")
-                .attr("cx", d => projectionGeo([+d.longitude, +d.latitude])[0])
-                .attr("cy", d => projectionGeo([+d.longitude, +d.latitude])[1])
-                .attr("r", d => Math.sqrt(+d.number_of_reviews) / 2)
-                .attr("fill", "crimson")
-                .attr("opacity", 0.3)
-                .on("mouseover", function (event, d) {
-                  d3.select("#tooltipMap")
-                    .style("opacity", 1)
-                    .html(`
-                      <strong>${d.name || "Alojamiento"}</strong><br/>
-                      Reseñas: ${d.number_of_reviews}<br/>
-                      Tipo: ${d.room_type || "N/A"}
-                    `)
-                    .style("left", (event.pageX + 10) + "px")
-                    .style("top", (event.pageY - 28) + "px");
-                })
-                .on("mouseout", () => {
-                  d3.select("#tooltipMap")
-                    .style("opacity", 0);
-                });
-
-          // Leyenda escala de reseñas
-            const legend = svgGeo.append("g")
-              .attr("transform", `translate(${widthGeo - 130},${heightGeo - 150})`);
-
-            const reseñas = [1, 10, 50, 100, 300];
-
-            reseñas.forEach((r, i) => {
-              legend.append("circle")
-                .attr("cx", 0)
-                .attr("cy", i * 25)
-                .attr("r", Math.sqrt(r) / 2)
-                .attr("fill", "crimson")
-                .attr("opacity", 0.4);
-
-              legend.append("text")
-                .attr("x", 15)
-                .attr("y", i * 25 + 4)
-                .text(`${r} reseñas`)
-                .attr("font-size", "12px")
-                .attr("fill", "#333");
-            });
-
-            legend.append("text")
-              .attr("x", 0)
-              .attr("y", -10)
-              .text("Escala de Reseñas")
-              .attr("font-weight", "bold")
-              .attr("font-size", "12px");
-
-
-        });
-
-
-
-    });
-   
-  </script>
+<div style="text-align:center; margin-bottom: 20px;">
+<label for="filterRoomType">Filtrar por tipo de alojamiento: </label>
+<select id="filterRoomType">
+<option value="Todos">Todos</option>
+</select>
+</div>
+<h1 style="text-align:center;">Visualización Airbnb - Buenos Aires</h1>
+<!-- Gráfico 1: Distribución por tipo de alojamiento -->
+<!-- Gráfico 2: Histograma de precios -->
+<!-- Gráfico 3: Relación entre días disponibles y número de reseñas -->
+<!-- Gráfico 4: Frecuencia mensual de reseñas por tipo de habitación -->
+<!-- Gráfico 5: Mapa de calor de alojamientos con contorno -->
+<!-- Tooltip global -->
+<div class="chart-grid"><div class="chart-block">
+<div class="chart-title">Distribución por tipo de alojamiento</div>
+<div class="chart-desc">Cantidad de anuncios publicados según el tipo de habitación ofrecida.</div>
+<svg height="400" id="barChart" width="600"></svg>
+</div><div class="chart-block">
+<div class="chart-title">Distribución de Precios</div>
+<div class="chart-desc">Frecuencia de alojamientos según su precio por noche (ARS$).</div>
+<svg height="400" id="priceHistogram" width="600"></svg>
+</div><div class="chart-block">
+<div class="chart-title">Días Disponibles vs. Número de Reseñas</div>
+<div class="chart-desc">Relación entre la disponibilidad del alojamiento en el año y la cantidad de reseñas.</div>
+<svg height="400" id="scatterChart" width="600"></svg>
+</div><div class="chart-block">
+<div class="chart-title">Frecuencia Mensual de Reseñas</div>
+<div class="chart-desc">Cantidad de reseñas por tipo de habitación a lo largo de los meses.</div>
+<svg height="400" id="monthlyChart" width="600"></svg>
+</div><div class="chart-block">
+<div class="chart-title">Mapa de Alojamientos en Buenos Aires</div>
+<div class="chart-desc">Mapa con distribución espacial de alojamientos basada en número de reseñas.</div>
+<svg height="500" id="mapChartGeo" width="600"></svg>
+</div></div><div class="tooltip" id="tooltip"></div>
+<div class="tooltip" id="tooltipMap"></div>
+<!-- Script -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="script.js"></script>
 </body>
 </html>
